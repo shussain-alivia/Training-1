@@ -1,47 +1,25 @@
-// ... (existing code)
+using Amazon.CDK;
+using Amazon.CDK.AWS.APIGateway;
+using Amazon.CDK.AWS.CertificateManager;
 
-// Define your custom domain name
-string domainName = "example.com"; // Replace with your desired domain name
+// Inside your construct or stack
+// Assuming you have a certificate ARN available as 'certificateArn'
 
-// Define the base path for your API
-string basePath = "/v1"; // Replace with your desired base path
+// Create a certificate using the certificate ARN
+ICertificate certificate = Certificate.FromCertificateArn(this, "Certificate", certificateArn);
 
-// Create the domain name for the API Gateway
-var domain = new DomainName(this, $"{serviceFriendlyName}CustomDomain", new DomainNameProps
+// Create the API Gateway domain name
+var apiDomainName = new CfnDomainName(this, "ApiDomainName", new CfnDomainNameProps
 {
-    DomainName = domainName,
-    Certificate = Certificate.FromCertificateArn(this, "Certificate", "YOUR_CERTIFICATE_ARN"), // Replace with your certificate ARN
-    EndpointType = EndpointType.EDGE,
-    SecurityPolicy = SecurityPolicy.TLS_1_2
+    DomainName = "api.example.com", // Your domain name
+    CertificateArn = certificate.CertificateArn // ARN of the certificate
 });
 
-// Create the API Gateway using the custom domain name
-var api = new LambdaRestApi(this, restApiVar, new LambdaRestApiProps
+// Creating the BasePathMapping to associate the domain with the API
+var basePathMapping = new BasePathMapping(this, "BasePathMapping", new BasePathMappingProps
 {
-    Description = $"API Gateway for {serviceFriendlyName} Lambda, created from the CDR",
-    RestApiName = restApiVar,
-    Handler = serviceLanbda,
-    Proxy = true,
-    DefaultCorsPreflightOptions = new CorsOptions
-    {
-        AllowCredentials = true,
-        AllowHeaders = new string[] { "*" },
-        AllowMethods = new string[] { "*" },
-        AllowOrigins = new string[] { "*" }
-    },
-    DomainName = new DomainNameOptions
-    {
-        DomainName = domain.DomainNameAliasDomainName,
-        Certificate = domain.Certificate,
-        BasePath = basePath
-    }
+    DomainName = apiDomainName,
+    RestApi = yourLambdaRestApi, // Replace 'yourLambdaRestApi' with your API object
+    BasePath = "/", // Specify the base path you want
+    Stage = yourDeploymentStage // Replace 'yourDeploymentStage' with your Stage object
 });
-
-// Map the custom domain name to the API Gateway
-domain.AddBasePathMapping(api, new BasePathMappingOptions
-{
-    BasePath = basePath,
-    Stage = api.DeploymentStage
-});
-
-// ...
