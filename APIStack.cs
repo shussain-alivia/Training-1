@@ -1,3 +1,10 @@
+var targetInput = RuleTargetInput.FromObject(new
+            {
+                Detail = "{ \"eventSource\": [\"aws:s3\"], \"eventName\": [\"ObjectCreated:*\"], \"eventTime\": \"$input{Time}\", \"bucketName\": \"$input{Bucket}\", \"objectKey\": \"$input{Key}\" }",
+                DetailType = "S3ObjectCreated" // DetailType for the event (Modify as needed)
+            });
+
+
 internal FfsRebatesApiStack(Construct scope, string id, FfsRebatesApiProps props = null) : base(scope, id, props)
 {
     // Lookup Pod VPC by ID
