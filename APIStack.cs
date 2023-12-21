@@ -1,8 +1,21 @@
-var targetInput = RuleTargetInput.FromObject(new
-            {
-                Detail = "{ \"eventSource\": [\"aws:s3\"], \"eventName\": [\"ObjectCreated:*\"], \"eventTime\": \"$input{Time}\", \"bucketName\": \"$input{Bucket}\", \"objectKey\": \"$input{Key}\" }",
-                DetailType = "S3ObjectCreated" // DetailType for the event (Modify as needed)
-            });
+rule.AddTarget(new LambdaFunction(lambdaFunction, new LambdaFunctionProps
+{
+    Event = RuleTargetInput.FromObject(new
+    {
+        Records = new[] {
+            new {
+                s3 = new {
+                    bucket = new {
+                        name = "YourBucketName"
+                    },
+                    object = new {
+                        key = "ObjectKey"
+                    }
+                }
+            }
+        }
+    })
+}));
 
 
 internal FfsRebatesApiStack(Construct scope, string id, FfsRebatesApiProps props = null) : base(scope, id, props)
