@@ -1,76 +1,26 @@
-using Amazon.CDK;
-using Amazon.CDK.AWS.Lambda;
-using Amazon.CDK.AWS.S3;
-using Amazon;
-using Amazon.Lambda;
-using Amazon.Lambda.Model;
-using System;
-using System.Threading.Tasks;
+Code = Code.FromInline(@"
+def lambda_handler(event, context):
+    import boto3
 
-namespace PythonLambda
-{
-    public class CdkPythonLambdaStack : Stack
-    {
-        public Function MyPythonLambdaHandler { get; private set; }
+    # Initialize S3 client
+    s3 = boto3.client('s3')
 
-        internal CdkPythonLambdaStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
-        {
-            // Fetch the PythonFiles directory path from the environment variable
-            var pythonFilesPath = Environment.GetEnvironmentVariable("PYTHON_FILES_PATH");
+    # Specify the bucket name
+    bucket_name = '" + bucket.BucketName + @"'
 
-            if (pythonFilesPath == null)
-            {
-                throw new InvalidOperationException("PYTHON_FILES_PATH environment variable is not set.");
-            }
+    try:
+        # List objects in the bucket
+        response = s3.list_objects_v2(Bucket=bucket_name)
 
-            // Create an Asset from the specified path
-            var pythonFilesAsset = new Asset(this, "PythonFilesAsset", new AssetProps
-            {
-                Path = pythonFilesPath
-            });
+        # Print object details
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                print('Object Key:', obj['Key'])
+                print('Object Size:', obj['Size'])
+                print('---')
 
-            // Create a Lambda function with a custom name
-            MyPythonLambdaHandler = new Function(this, "CustomLambdaName", new FunctionProps
-            {
-                Runtime = Runtime.PYTHON_3_8,
-                Handler = "python.my_python_function",
-                Code = Code.FromAsset(pythonFilesAsset.AssetPath),
-                Timeout = Duration.Seconds(30),
-                FunctionName = "MyCustomLambdaFunction" // Custom name for the Lambda function
-            });
-
-            // Check if the Lambda function exists
-            Task.Run(async () =>
-            {
-                using (var lambdaClient = new AmazonLambdaClient(RegionEndpoint.USWest2)) // Replace with the appropriate region
-                {
-                    var functionName = "MyCustomLambdaFunction"; // Replace with your Lambda function's name
-                    var exists = await FunctionExists(lambdaClient, functionName);
-
-                    if (exists)
-                    {
-                        Console.WriteLine($"Lambda function '{functionName}' exists.");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Lambda function '{functionName}' does not exist.");
-                    }
-                }
-            }).Wait(); // Blocking call to wait for the asynchronous task to complete
-        }
-
-        // Function to check if a Lambda function exists
-        private static async Task<bool> FunctionExists(AmazonLambdaClient lambdaClient, string functionName)
-        {
-            try
-            {
-                var response = await lambdaClient.GetFunctionAsync(new GetFunctionRequest { FunctionName = functionName });
-                return response != null;
-            }
-            catch (ResourceNotFoundException)
-            {
-                return false;
-            }
-        }
-    }
-}
+        return 'Successfully listed objects in S3 bucket.'
+    except Exception as e:
+        print('Error:', str(e))
+        return 'Error listing objects in S3 bucket.'
+")
