@@ -1,82 +1,95 @@
-internal void CreateServiceLambda(IVpc vpc, ISubnetSelection subnetSelection, string serviceName, string friendlyName, string runtimeEnvironment, FfsSnsTopic snsTopic = null)
+[4:54 AM] Sadaf Hussain
+using Amazon.CDK;
+using Amazon.CDK.AWS.CloudWatch;
+using Amazon.CDK.AWS.Events;
+using Amazon.CDK.AWS.Events.Targets;
+using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.S3;
+ 
+namespace YourNamespace
 {
-    string serviceFullName = $"FeeForService.{serviceName}";
-    string serviceFriendlyName = $"{serviceName}{friendlyName}";
-
-    IFunction serviceLambda = new Function(this, $"{serviceFriendlyName} Lambda", new FunctionProps()
+    public class S3EventBridgeStack : Stack
     {
-        FunctionName = $"{serviceFriendlyName}Lambda",
-        Code = Amazon.CDK.AWS.Lambda.Code.FromAsset($"../dist/{serviceFullName}/release/publish"),
-        Handler = serviceFullName,
-        Runtime = Runtime.DOTNET_6,
-        Description = $"Lambda function created for \"{friendlyName}\"",
-        Vpc = vpc,
-        MemorySize = 2848,
-        VpcSubnets = subnetSelection,
-        Timeout = Duration.Seconds(30),
-        Environment = new Dictionary<string, string>
+        public S3EventBridgeStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
-            { "ASPNETCORE_ENVIRONMENT", runtimeEnvironment }
+            // Create a new EventBridge EventBus
+            EventBus eventBus = new EventBus(this, "NewEventBus", new EventBusProps
+            {
+                EventSourceName = "MyCustomEventSource"
+            });
+ 
+            // S3 bucket creation or retrieval if it already exists
+            Bucket existingBucket = Bucket.FromBucketName(this, "ExistingBucket", "YourExistingBucketName") ??
+                                    new Bucket(this, "NewBucket", new BucketProps
+                                    {
+                                        BucketName = "NewBucketName"
+                                    });
+ 
+            // Lambda function
+            Function pythonLambda = new Function(this, "PythonLambda", new FunctionProps
+            {
+                Runtime = Runtime.PYTHON_3_8,
+                Handler = "index.handler",
+                Code = Code.FromAsset("path/to/your/python/function/code"),
+            });
+ 
+            // Granting necessary permissions for the lambda function to access S3
+            existingBucket.GrantReadWrite(pythonLambda);
+ 
+            // EventBridge Rule under the newly created EventBus for S3 put event
+            Rule s3PutRule = new Rule(this, "S3PutRule", new RuleProps
+            {
+                EventBus = eventBus,
+                EventPattern = new EventPattern
+                {
+                    Source = new[] { "aws.s3" },
+                    DetailType = new[] { "AWS API Call via CloudTrail" },
+                    Detail = new
+                    {
+                        eventName = new[] { "PutObject" },
+                        requestParameters = new
+                        {
+                            bucketName = new[] { existingBucket.BucketName },
+                        }
+                    }
+                }
+            });
+ 
+            // Connecting S3 put event to Lambda function through EventBridge
+            s3PutRule.AddTarget(new LambdaFunction(pythonLambda, new LambdaFunctionProps
+            {
+                Event = RuleTargetInput.FromObject(new
+                {
+                    detailType = "CustomEvent",
+                    source = "MyCustomEventSource",
+                    resources = new[] { existingBucket.BucketArn }
+                })
+            }));
+ 
+            // Pushing EventBridge logs to CloudWatch Logs for processing
+            LogGroup logGroup = new LogGroup(this, "EventBridgeLogGroup", new LogGroupProps
+            {
+                LogGroupName = $"/aws/events/{eventBus.EventBusName}",
+                RemovalPolicy = RemovalPolicy.DESTROY
+            });
+ 
+            eventBus.AddPermission("PushToCloudWatch", new EventBusProps
+            {
+                PolicyStatements = new[] {
+                    new PolicyStatement(new PolicyStatementProps
+                    {
+                        Actions = new[] { "logs:CreateLogStream", "logs:PutLogEvents" },
+                        Resources = new[] { logGroup.LogGroupArn }
+                    })
+                }
+            });
+ 
+            // CDK Diff and Deploy
+            var diffOutput = new DiffOptions();
+            var diff = this.Diff(diffOutput);
+ 
+            var deployOutput = new DeployOptions();
+            this.Deploy(deployOutput);
         }
-    });
-
-    string domainName = $"api.{runtimeEnvironment}.orbisrx.com"; // Replace with your desired domain
-
-    // Create the domain name for the API Gateway
-    var domain = new DomainName(this, $"{serviceFriendlyName}CustomDomain", new DomainNameProps
-    {
-        DomainName = domainName,
-        Certificate = Certificate.FromCertificateArn(this, "Certificate", "arn:aws:acm:us-east-1:232063328188:certificate/54cdb0e6-cb89-4395-a095-112564a6ef55"), // Replace with your certificate ARN 
-        EndpointType = EndpointType.EDGE,
-        SecurityPolicy = SecurityPolicy.TLS_1_2
-    });
-
-    var restApiVar = $"{serviceFriendlyName}-Lambda-Endpoint-CDK";
-    
-    // Add the API Gateway for this lambda function
-    var api = new LambdaRestApi(this, restApiVar, new LambdaRestApiProps
-    {
-        Description = $"API Gateway for {serviceFriendlyName} Lambda, created from the CDK",
-        RestApiName = restApiVar,
-        Handler = serviceLambda,
-        Proxy = true,
-        DefaultCorsPreflightOptions = new CorsOptions
-        {
-            AllowCredentials = true,
-            AllowHeaders = new string[] { "*" },
-            AllowMethods = new string[] { "*" },
-            AllowOrigins = new string[] { "*" }
-        },
-        DomainName = new DomainNameOptions
-        {
-            DomainName = domain.DomainNameAliasDomainName,
-            Certificate = domain.Certificate,
-        }
-    });
-
-    // Map Lambda functions to specific paths on the custom domain
-    domain.AddBasePathMapping(api, new BasePathMappingOptions
-    {
-        BasePath = "/alerts", // Replace with your specific base paths
-        Stage = api.DeploymentStage
-        // Lambda function associations based on the acceptance criteria URLs
-        // Example: alertsLambdaUrl goes here
-    });
-
-    domain.AddBasePathMapping(api, new BasePathMappingOptions
-    {
-        BasePath = "/authorization", // Replace with your specific base paths
-        Stage = api.DeploymentStage
-        // Lambda function associations based on the acceptance criteria URLs
-        // Example: authorizationLambdaUrl goes here
-    });
-
-    // Add more base path mappings for other Lambda functions as per acceptance criteria
-
-    // Policy statement for RDS DB instance access
-    PolicyStatement rdsPolicyStatement = new PolicyStatement();
-    rdsPolicyStatement.AddActions("rds-db:connect", "s3:Put*", "s3:Get*", "s3:Delete*", "secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue");
-    rdsPolicyStatement.AddResources("*");
-    rdsPolicyStatement.Effect = Effect.ALLOW;
-    serviceLambda.AddToRolePolicy(rdsPolicyStatement);
+    }
 }
