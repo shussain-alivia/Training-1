@@ -12,17 +12,49 @@ namespace EventBridgeLambdaIntegration
     {
         public EventBridgeLambdaStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
-            // Create the Lambda function
-            var myLambda = new Function(this, "MyLambda", new FunctionProps
+            // ... (previous Lambda function and permissions setup)
+
+            // Create CloudWatch Logs subscription filter for EventBridge
+            var logGroup = new LogGroup(this, "MyLogGroup", new LogGroupProps
             {
-                Runtime = Runtime.DOTNET_CORE_3_1,
-                Handler = "EventBridgeLambdaIntegration::EventBridgeLambdaIntegration.Functions::FunctionHandler", // Replace with your handler method
-                Code = Code.FromAsset("./MyLambdaFunction"), // Replace with your Lambda function's code path
-                // ... other Lambda function configuration
+                LogGroupName = "/eventbridge/rebates-etl-event-logs" // Replace with your log group name
             });
 
-            // Grant permissions to the Lambda function to put events to EventBridge
-            myLambda.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+            var eventRuleForLogs = new Rule(this, "MyEventRuleForLogs", new RuleProps
+            {
+                EventPattern = new EventPattern
+                {
+                    Source = new[] { "aws.logs" },
+                    DetailType = new[] { "Log Group" },
+                    Detail = new Dictionary<string, object>
+                    {
+                        { "logGroupName", new[] { "/eventbridge/rebates-etl-event-logs" } } // Replace with your log group name
+                    }
+                }
+            });
+
+            eventRuleForLogs.AddTarget(new LambdaFunction(myLambda));
+            AttachLogGroupSubscription(eventRuleForLogs.LogGroup);
+        }
+
+        private void AttachLogGroupSubscription(LogGroup logGroup)
+        {
+            // Set up a subscription filter for the log group
+            logGroup.AddSubscriptionFilter("MySubscriptionFilter", new SubscriptionFilterOptions
+            {
+                FilterPattern = FilterPattern.StringLiteral("[timestamp=*Z, request_id=\"*\"]"), // Adjust the filter pattern as needed
+                Destination = new LambdaDestination(myLambda)
+            });
+        }
+    }
+}
+
+
+
+
+
+
+myLambda.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
             {
                 Actions = new[] { "events:PutEvents" },
                 Resources = new[] { "*" } // Adjust the resource to a specific EventBridge bus ARN if possible
