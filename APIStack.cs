@@ -1,129 +1,102 @@
-// Link S3 bucket events to trigger the Lambda function
-            myLambda.AddEventSource(new S3EventSource(
-                existingBucket: Bucket.FromBucketName(this, "MyBucket", "your-bucket-name"), // Replace with your bucket name
-                events: new S3EventSourceProps { Events = [S3EventType.OBJECT_CREATED] }
-            ));
-        Console.WriteLine("Bucket notification configured!");
-    }
-}
-
-
-
-
-
-
-
-
-// Configure S3 event notification to trigger the Lambda for PutObject events
-            s3Bucket.AddObjectCreatedNotification(new S3EventSourceProps
-            {
-                Events = new[] { S3EventType.OBJECT_CREATED },
-                Target = new LambdaFunction(lambdaFunction)
-            });
-
 using Amazon.CDK;
+using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
-using Amazon.CDK.AWS.Lambda;
-using Amazon.CDK.AWS.S3;
-using Amazon.CDK.AWS.S3.Events;
-using Amazon.CDK.AWS.CloudWatch;
-using Amazon.CDK.AWS.CloudWatch.Logs;
+using Amazon;
+using Amazon.EventBridge;
+using Amazon.EventBridge.Model;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
-namespace YourNamespace
+namespace EventBridgeLambdaIntegration
 {
-    public class S3LambdaEventBridgeStack : Stack
+    public class EventBridgeLambdaStack : Stack
     {
-        public S3LambdaEventBridgeStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+        public EventBridgeLambdaStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
-            // Create Lambda function
-            var lambdaFunction = new Function(this, "MyLambdaFunction", new FunctionProps
+            // Create the Lambda function
+            var myLambda = new Function(this, "MyLambda", new FunctionProps
             {
-                Runtime = Runtime.PYTHON_3_8,
-                Handler = "index.lambda_handler",
-                Code = Code.FromAsset("./lambda"), // Path to your Python Lambda code
-                Timeout = Duration.Seconds(30) // Adjust timeout as needed
+                Runtime = Runtime.DOTNET_CORE_3_1,
+                Handler = "EventBridgeLambdaIntegration::EventBridgeLambdaIntegration.Functions::FunctionHandler", // Replace with your handler method
+                Code = Code.FromAsset("./MyLambdaFunction"), // Replace with your Lambda function's code path
+                // ... other Lambda function configuration
             });
 
-            // Create an S3 bucket
-            var s3Bucket = new Bucket(this, "MyS3Bucket", new BucketProps
+            // Grant permissions to the Lambda function to put events to EventBridge
+            myLambda.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
             {
-                RemovalPolicy = RemovalPolicy.DESTROY // Adjust as needed
-            });
+                Actions = new[] { "events:PutEvents" },
+                Resources = new[] { "*" } // Adjust the resource to a specific EventBridge bus ARN if possible
+            }));
 
-            // Grant permissions to the Lambda function to access the S3 bucket
-            s3Bucket.GrantReadWrite(lambdaFunction);
-
-            // Configure S3 event notification to trigger the Lambda for PutObject events
-            s3Bucket.AddEventNotification(EventType.OBJECT_CREATED, new LambdaDestination(lambdaFunction));
-
-            // Create an EventBridge event bus
-            var eventBus = new EventBus(this, "MyEventBus");
-
-            // Create an EventBridge rule to match the S3 event and trigger the Lambda
-            var eventRule = new Rule(this, "S3LambdaEventRule", new RuleProps
+            // Check or modify the EventBridge rule configuration
+            var eventRule = new Rule(this, "MyEventRule", new RuleProps
             {
                 EventPattern = new EventPattern
                 {
-                    Source = new[] { "aws.s3" },
-                    DetailType = new[] { "AWS API Call via CloudTrail" },
-                    Detail = new
+                    Source = new[] { "aws.lambda" },
+                    DetailType = new[] { "Lambda Function Invocation Result" },
+                    Detail = new Dictionary<string, object>
                     {
-                        eventSource = new[] { "s3.amazonaws.com" },
-                        eventName = new[] { "PutObject" }
+                        { "requestParameters.functionName", new[] { myLambda.FunctionName } }
                     }
-                },
-                EventBus = eventBus
+                }
             });
 
-            // Add Lambda function as a target for the EventBridge rule
-            eventRule.AddTarget(new LambdaFunction(lambdaFunction));
+            // Add the Lambda function as a target for the EventBridge rule
+            eventRule.AddTarget(new LambdaFunction(myLambda));
 
-            // Create a CloudWatch Log Group
+            // Create CloudWatch Logs subscription filter for EventBridge
             var logGroup = new LogGroup(this, "MyLogGroup", new LogGroupProps
             {
-                LogGroupName = "/your/log/group/name" // Replace with your desired log group name
+                LogGroupName = "YourLogGroupName" // Replace with your log group name
             });
 
-            // Create a CloudWatch Log Stream for the Lambda logs
-            var logStream = new LogStream(this, "MyLogStream", new LogStreamProps
+            var eventBridgePutEventsTarget = new EventBridgePutEvents(new PutEventsProps
             {
-                LogGroup = logGroup
+                EventBus = EventBus.FromEventBusName(this, "MyEventBus", "YourEventBusName"), // Replace with your EventBridge bus name
             });
 
-            // Add Lambda function as a target for streaming logs to the CloudWatch Log Group
-            lambdaFunction.LogGroup.AddSubscriptionFilter("LambdaLogsSubscription", new SubscriptionFilterOptions
+            var eventRuleForLogs = new Rule(this, "MyEventRuleForLogs", new RuleProps
             {
-                Destination = logStream
+                EventPattern = new EventPattern
+                {
+                    Source = new[] { "aws.logs" },
+                    DetailType = new[] { "Log Group" },
+                    Detail = new Dictionary<string, object>
+                    {
+                        { "logGroupName", "YourLogGroupName" } // Replace with your log group name
+                    }
+                }
             });
 
-            // Create an EventBridge Log Group
-            var eventBridgeLogGroup = new LogGroup(this, "MyEventBridgeLogGroup", new LogGroupProps
+            eventRuleForLogs.AddTarget(eventBridgePutEventsTarget);
+
+            // Test with a direct PutEvents call within the Lambda function
+            myLambda.AddEnvironment("EVENT_BUS_NAME", "YourEventBusName"); // Replace with your EventBridge bus name
+
+            // Inside your Lambda function's handler method
+            async Task FunctionHandler()
             {
-                LogGroupName = "/your/eventbridge/log/group/name" // Replace with your EventBridge log group name
-            });
+                var eventBridgeClient = new AmazonEventBridgeClient(RegionEndpoint.YourRegion); // Replace with your region
+                var request = new PutEventsRequest
+                {
+                    Entries = new List<PutEventsRequestEntry>
+                    {
+                        new PutEventsRequestEntry
+                        {
+                            Source = "MyEventSource",
+                            DetailType = "MyEventType",
+                            Detail = "{\"key1\": \"value1\", \"key2\": \"value2\"}" // Replace with your event data
+                        }
+                    }
+                };
 
-            // Create an EventBridge Log Stream for Lambda logs
-            var eventBridgeLogStream = new LogStream(this, "MyEventBridgeLogStream", new LogStreamProps
-            {
-                LogGroup = eventBridgeLogGroup
-            });
-
-            // Connect the EventBridge Log Stream to the Lambda logs
-            logStream.AddSubscriptionFilter("EventBridgeLogsSubscription", new SubscriptionFilterOptions
-            {
-                Destination = eventBridgeLogStream
-            });
-        }
-    }
-
-    class Program
-    {
-        static void Main(string[] args)
-        {
-            var app = new App();
-            new S3LambdaEventBridgeStack(app, "S3LambdaEventBridgeStack");
-            app.Synth();
+                await eventBridgeClient.PutEventsAsync(request);
+            }
         }
     }
 }
