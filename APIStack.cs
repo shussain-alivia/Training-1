@@ -1,10 +1,8 @@
 using Amazon.CDK;
 using Amazon.CDK.AWS.Lambda;
-using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
-using Amazon.CDK.AWS.S3;
 
 namespace EventBridgeLambdaIntegration
 {
@@ -12,69 +10,30 @@ namespace EventBridgeLambdaIntegration
     {
         public EventBridgeLambdaStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
-            // Create an S3 bucket
-            var myBucket = new Bucket(this, "MyBucket", new BucketProps
-            {
-                // Your S3 bucket configuration
-            });
-
             // Create a Lambda function
             var myLambda = new Function(this, "MyLambda", new FunctionProps
             {
                 // Your Lambda function configuration
             });
 
-            // Grant permissions to Lambda to access S3
-            myBucket.GrantReadWrite(myLambda);
-
-            // Create an EventBridge rule for S3 events
-            var s3EventRule = new Rule(this, "S3EventRule", new RuleProps
-            {
-                EventPattern = new EventPattern
-                {
-                    Source = new[] { "aws.s3" },
-                    DetailType = new[] { "AWS API Call via CloudTrail" },
-                    Detail = new Dictionary<string, object>
-                    {
-                        { "eventSource", new[] { "s3.amazonaws.com" } },
-                        { "eventName", new[] { "PutObject" } } // Adjust event name as needed
-                        // Add more conditions as required to match your S3 event
-                    }
-                }
-            });
-
-            // Add Lambda as a target for S3 events
-            s3EventRule.AddTarget(new LambdaFunction(myLambda));
-
             // Stream Lambda logs to EventBridge Logs
-            AttachLambdaLogGroupSubscription(myLambda.LogGroup);
-        }
-
-        private void AttachLambdaLogGroupSubscription(LogGroup logGroup)
-        {
-            // Create an EventBridge rule for Lambda logs
-            var lambdaLogRule = new Rule(this, "LambdaLogRule", new RuleProps
+            var logGroup = new LogGroup(this, "MyLambdaLogGroup", new LogGroupProps
             {
-                EventPattern = new EventPattern
-                {
-                    Source = new[] { "aws.logs" },
-                    DetailType = new[] { "AWS Lambda Log Event" },
-                    Detail = new Dictionary<string, object>
-                    {
-                        { "logGroup", new[] { logGroup.LogGroupName } }
-                    }
-                }
+                LogGroupName = $"/aws/lambda/{myLambda.FunctionName}" // Automatically creates log group for Lambda
             });
 
-            // Add the LogGroup subscription as a target for Lambda logs
-            lambdaLogRule.AddTarget(new EventBridgePutEvents(new PutEventsProps
+            // Subscribe Lambda logs to EventBridge bus
+            logGroup.AddSubscriptionFilter("LambdaSubscriptionFilter", new SubscriptionFilterOptions
             {
-                EventBus = EventBus.FromEventBusName(this, "MyEventBus", "YourEventBusName"), // Replace with your EventBridge bus name
-            }));
+                FilterPattern = FilterPattern.AllEvents(), // Adjust the filter pattern as needed
+                Destination = new EventBridgeDestination(new EventBridgeDestinationProps
+                {
+                    EventBus = EventBus.FromEventBusName(this, "MyEventBus", "YourEventBusName") // Replace with your EventBridge bus name
+                })
+            });
         }
     }
 }
-
 
 
 
