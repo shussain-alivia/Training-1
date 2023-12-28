@@ -1,40 +1,61 @@
 using Amazon.CDK;
-using Amazon.CDK.AWS.Lambda;
-using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
+using Amazon.CDK.AWS.S3;
+using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.IAM;
 
-namespace EventBridgeLambdaIntegration
+namespace S3EventBridgeMonitoring
 {
-    public class EventBridgeLambdaStack : Stack
+    public class S3EventBridgeStack : Stack
     {
-        public EventBridgeLambdaStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+        public S3EventBridgeStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
-            // Create a Lambda function
-            var myLambda = new Function(this, "MyLambda", new FunctionProps
+            // Create an IAM role for the Lambda function
+            var lambdaRole = new Role(this, "MyLambdaRole", new RoleProps
             {
-                // Your Lambda function configuration
+                AssumedBy = new ServicePrincipal("lambda.amazonaws.com"),
+                RoleName = "MyLambdaRole",
+                ManagedPolicies = new IManagedPolicy[] {
+                    ManagedPolicy.FromManagedPolicyArn(this, "EventBridgePolicy", "arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess"),
+                    ManagedPolicy.FromManagedPolicyArn(this, "S3Policy", "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess")
+                }
             });
 
-            // Stream Lambda logs to EventBridge Logs
-            var logGroup = new LogGroup(this, "MyLambdaLogGroup", new LogGroupProps
+            // Create an S3 bucket
+            var myBucket = new Bucket(this, "MyBucket", new BucketProps
             {
-                LogGroupName = $"/aws/lambda/{myLambda.FunctionName}" // Automatically creates log group for Lambda
+                // Your S3 bucket configuration
             });
 
-            // Subscribe Lambda logs to EventBridge bus
-            logGroup.AddSubscriptionFilter("LambdaSubscriptionFilter", new SubscriptionFilterOptions
+            // Reference an existing Lambda function by its name
+            var existingLambda = Function.FromFunctionName(this, "MyExistingLambda", "YourExistingLambdaName");
+
+            // Set up an EventBridge rule for S3 PutObject events
+            var s3EventRule = new Rule(this, "S3PutObjectRule", new RuleProps
             {
-                FilterPattern = FilterPattern.AllEvents(), // Adjust the filter pattern as needed
-                Destination = new EventBridgeDestination(new EventBridgeDestinationProps
+                EventPattern = new EventPattern
                 {
-                    EventBus = EventBus.FromEventBusName(this, "MyEventBus", "YourEventBusName") // Replace with your EventBridge bus name
-                })
+                    Source = new[] { "aws.s3" },
+                    DetailType = new[] { "AWS API Call via CloudTrail" },
+                    Detail = new Dictionary<string, object>
+                    {
+                        { "eventSource", new[] { "s3.amazonaws.com" } },
+                        { "eventName", new[] { "PutObject" } }, // Filter for PutObject events
+                        { "requestParameters.bucketName", new[] { myBucket.BucketName } } // Filter for the specific bucket
+                    }
+                }
+            });
+
+            // Add the existing Lambda as a target for S3 PutObject events
+            s3EventRule.AddTarget(new LambdaFunction(existingLambda), new AddPermissionOptions
+            {
+                Principal = new ServicePrincipal("events.amazonaws.com"),
+                SourceArn = s3EventRule.RuleArn
             });
         }
     }
 }
-
 
 
 
