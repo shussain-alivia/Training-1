@@ -4,7 +4,7 @@ using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
-using Amazon;
+using Amazon.CDK.AWS.S3;
 
 namespace EventBridgeLambdaIntegration
 {
@@ -12,39 +12,65 @@ namespace EventBridgeLambdaIntegration
     {
         public EventBridgeLambdaStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
-            // ... (previous Lambda function and permissions setup)
-
-            // Create CloudWatch Logs subscription filter for EventBridge
-            var logGroup = new LogGroup(this, "MyLogGroup", new LogGroupProps
+            // Create an S3 bucket
+            var myBucket = new Bucket(this, "MyBucket", new BucketProps
             {
-                LogGroupName = "/eventbridge/rebates-etl-event-logs" // Replace with your log group name
+                // Your S3 bucket configuration
             });
 
-            var eventRuleForLogs = new Rule(this, "MyEventRuleForLogs", new RuleProps
+            // Create a Lambda function
+            var myLambda = new Function(this, "MyLambda", new FunctionProps
+            {
+                // Your Lambda function configuration
+            });
+
+            // Grant permissions to Lambda to access S3
+            myBucket.GrantReadWrite(myLambda);
+
+            // Create an EventBridge rule for S3 events
+            var s3EventRule = new Rule(this, "S3EventRule", new RuleProps
             {
                 EventPattern = new EventPattern
                 {
-                    Source = new[] { "aws.logs" },
-                    DetailType = new[] { "Log Group" },
+                    Source = new[] { "aws.s3" },
+                    DetailType = new[] { "AWS API Call via CloudTrail" },
                     Detail = new Dictionary<string, object>
                     {
-                        { "logGroupName", new[] { "/eventbridge/rebates-etl-event-logs" } } // Replace with your log group name
+                        { "eventSource", new[] { "s3.amazonaws.com" } },
+                        { "eventName", new[] { "PutObject" } } // Adjust event name as needed
+                        // Add more conditions as required to match your S3 event
                     }
                 }
             });
 
-            eventRuleForLogs.AddTarget(new LambdaFunction(myLambda));
-            AttachLogGroupSubscription(eventRuleForLogs.LogGroup);
+            // Add Lambda as a target for S3 events
+            s3EventRule.AddTarget(new LambdaFunction(myLambda));
+
+            // Stream Lambda logs to EventBridge Logs
+            AttachLambdaLogGroupSubscription(myLambda.LogGroup);
         }
 
-        private void AttachLogGroupSubscription(LogGroup logGroup)
+        private void AttachLambdaLogGroupSubscription(LogGroup logGroup)
         {
-            // Set up a subscription filter for the log group
-            logGroup.AddSubscriptionFilter("MySubscriptionFilter", new SubscriptionFilterOptions
+            // Create an EventBridge rule for Lambda logs
+            var lambdaLogRule = new Rule(this, "LambdaLogRule", new RuleProps
             {
-                FilterPattern = FilterPattern.StringLiteral("[timestamp=*Z, request_id=\"*\"]"), // Adjust the filter pattern as needed
-                Destination = new LambdaDestination(myLambda)
+                EventPattern = new EventPattern
+                {
+                    Source = new[] { "aws.logs" },
+                    DetailType = new[] { "AWS Lambda Log Event" },
+                    Detail = new Dictionary<string, object>
+                    {
+                        { "logGroup", new[] { logGroup.LogGroupName } }
+                    }
+                }
             });
+
+            // Add the LogGroup subscription as a target for Lambda logs
+            lambdaLogRule.AddTarget(new EventBridgePutEvents(new PutEventsProps
+            {
+                EventBus = EventBus.FromEventBusName(this, "MyEventBus", "YourEventBusName"), // Replace with your EventBridge bus name
+            }));
         }
     }
 }
