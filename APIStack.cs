@@ -1,3 +1,47 @@
+using Amazon;
+using Amazon.S3;
+using Amazon.S3.Model;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        string bucketName = "your-bucket-name";
+        string functionName = "your-lambda-function-arn"; // Lambda ARN
+
+        var s3Client = new AmazonS3Client(RegionEndpoint.USWest2); // Replace with your desired region
+
+        // Configure Lambda function invocation on S3 object creation
+        var response = await s3Client.PutBucketNotificationConfigurationAsync(new PutBucketNotificationConfigurationRequest
+        {
+            BucketName = bucketName,
+            NotificationConfiguration = new NotificationConfiguration
+            {
+                LambdaFunctionConfigurations = new List<LambdaFunctionConfiguration>
+                {
+                    new LambdaFunctionConfiguration
+                    {
+                        LambdaFunctionArn = functionName,
+                        Events = new List<EventType> { EventType.ObjectCreated } // Trigger Lambda on S3 object creation
+                    }
+                }
+            }
+        });
+
+        Console.WriteLine("Bucket notification configured!");
+    }
+}
+
+
+
+
+
+
+
+
 // Configure S3 event notification to trigger the Lambda for PutObject events
             s3Bucket.AddObjectCreatedNotification(new S3EventSourceProps
             {
