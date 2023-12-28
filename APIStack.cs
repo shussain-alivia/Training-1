@@ -1,3 +1,10 @@
+// Configure S3 event notification to trigger the Lambda for PutObject events
+            s3Bucket.AddObjectCreatedNotification(new S3EventSourceProps
+            {
+                Events = new[] { S3EventType.OBJECT_CREATED },
+                Target = new LambdaFunction(lambdaFunction)
+            });
+
 using Amazon.CDK;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
