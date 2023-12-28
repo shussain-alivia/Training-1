@@ -1,19 +1,7 @@
-def lambda_handler(event, context):
-    try:
-        # Check if the event is related to a PutObject operation
-        if event['detail']['eventName'] == 'PutObject':
-            # Get the bucket name and object key
-            bucket_name = event['detail']['requestParameters']['bucketName']
-            object_key = event['detail']['requestParameters']['key']
-
-            # Process the S3 PutObject event (example: print the details)
-            print(f"S3 PutObject event detected in bucket '{bucket_name}' for object '{object_key}'")
-        else:
-            # Handle other types of events
-            print("Received event not related to S3 PutObject")
-    except KeyError as e:
-        print(f"KeyError: {e} - Event structure doesn't match the expected format")
-
+lambdaFunction.AddEventSource(new S3EventSource(s3Bucket, new S3EventSourceProps
+            {
+                Events = new[] { S3EventType.OBJECT_CREATED } // Specify event types to trigger the Lambda function
+            }));
 namespace RebatesEtlInfrastructure
 {
     public class RebatesEtlInfrastructureStack : Stack
