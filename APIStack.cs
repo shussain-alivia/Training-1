@@ -5,10 +5,6 @@ using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
 using Amazon;
-using Amazon.EventBridge;
-using Amazon.EventBridge.Model;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace EventBridgeLambdaIntegration
 {
@@ -55,11 +51,6 @@ namespace EventBridgeLambdaIntegration
                 LogGroupName = "YourLogGroupName" // Replace with your log group name
             });
 
-            var eventBridgePutEventsTarget = new EventBridgePutEvents(new PutEventsProps
-            {
-                EventBus = EventBus.FromEventBusName(this, "MyEventBus", "YourEventBusName"), // Replace with your EventBridge bus name
-            });
-
             var eventRuleForLogs = new Rule(this, "MyEventRuleForLogs", new RuleProps
             {
                 EventPattern = new EventPattern
@@ -73,30 +64,7 @@ namespace EventBridgeLambdaIntegration
                 }
             });
 
-            eventRuleForLogs.AddTarget(eventBridgePutEventsTarget);
-
-            // Test with a direct PutEvents call within the Lambda function
-            myLambda.AddEnvironment("EVENT_BUS_NAME", "YourEventBusName"); // Replace with your EventBridge bus name
-
-            // Inside your Lambda function's handler method
-            async Task FunctionHandler()
-            {
-                var eventBridgeClient = new AmazonEventBridgeClient(RegionEndpoint.YourRegion); // Replace with your region
-                var request = new PutEventsRequest
-                {
-                    Entries = new List<PutEventsRequestEntry>
-                    {
-                        new PutEventsRequestEntry
-                        {
-                            Source = "MyEventSource",
-                            DetailType = "MyEventType",
-                            Detail = "{\"key1\": \"value1\", \"key2\": \"value2\"}" // Replace with your event data
-                        }
-                    }
-                };
-
-                await eventBridgeClient.PutEventsAsync(request);
-            }
+            eventRuleForLogs.AddTarget(new LambdaFunction(myLambda));
         }
     }
 }
