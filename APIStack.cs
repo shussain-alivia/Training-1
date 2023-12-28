@@ -1,81 +1,48 @@
-lambdaFunction.AddEventSource(new S3EventSource(s3Bucket, new S3EventSourceProps
-            {
-                Events = new[] { S3EventType.OBJECT_CREATED } // Specify event types to trigger the Lambda function
-            }));
-namespace RebatesEtlInfrastructure
+using Amazon.CDK;
+using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.S3;
+using Amazon.CDK.AWS.Lambda.EventSources;
+
+namespace S3EventLambdaStack
 {
-    public class RebatesEtlInfrastructureStack : Stack
+    public class S3EventLambdaStack : Stack
     {
-        internal RebatesEtlInfrastructureStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+        public S3EventLambdaStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
-            // Define S3 bucket names
-            string etlBucketName = "your-etl-bucket-name";
-            string dataBucketName = "your-data-bucket-name";
-
-            // Lambda Function
-            var rbtLambda = new Function(this, "RbtLambdaFunction", new FunctionProps
+            // Create an S3 bucket
+            var bucket = new Bucket(this, "MyS3Bucket", new BucketProps
             {
-                Runtime = Runtime.PYTHON_3_9,
-                Handler = "mdrpHandler.lambda_handler",
-                Code = Code.FromAsset("lambda/mdrpHandler.zip"),
-                // Add necessary Lambda configurations
+                BucketName = "my-unique-bucket-name", // Replace with your unique bucket name
+                RemovalPolicy = RemovalPolicy.DESTROY // Just an example, adjust according to your needs
             });
 
-            // Glue Role
-            var etlRole = new Role(this, "EtlRole", new RoleProps
+            // Create a Lambda function
+            var lambdaFn = new Function(this, "MyS3EventLambda", new FunctionProps
             {
-                AssumedBy = new ServicePrincipal("glue.amazonaws.com")
-            });
-            etlRole.AddManagedPolicy(ManagedPolicy.FromAwsManagedPolicyName("service-role/AWSGlueServiceRole"));
-            // Add more permissions or policies as required
-
-            // Glue Job
-            var rbtGlueJob = new CfnJob(this, "RbtGlueJob", new CfnJobProps
-            {
-                Role = etlRole.RoleArn,
-                Command = new Dictionary<string, object>
-                {
-                    { "Name", "glueetl" },
-                    { "ScriptLocation", $"s3://{etlBucketName}/glue/glue_starter_job.py" }
-                    // Add more Glue job configurations as needed
-                }
+                Runtime = Runtime.DOTNET_CORE_3_1, // Change to your preferred runtime
+                Handler = "MyAssembly::MyNamespace.MyClass::MyHandler", // Update with your handler method
+                Code = Code.FromAsset("path/to/your/lambda/code"), // Path to your lambda function code
+                Timeout = Duration.Seconds(30) // Set timeout as needed
             });
 
-            // EventBridge Rule for S3 PutObject event
-            var eventRule = new Rule(this, "RebatesFileEventRule", new RuleProps
-            {
-                EventPattern = new EventPattern
-                {
-                    Source = new[] { "aws.s3" },
-                    DetailType = new[] { "AWS API Call via CloudTrail" },
-                    Detail = new Dictionary<string, object>
-                    {
-                        { "eventSource", new[] { "s3.amazonaws.com" } },
-                        { "eventName", new[] { "PutObject" } },
-                        { "requestParameters", new Dictionary<string, object>
-                            {
-                                { "bucketName", etlBucketName },
-                                // Add more event pattern configurations based on your requirements
-                            }
-                        }
-                    }
-                }
-            });
+            // Grant permission for Lambda to access S3 bucket
+            bucket.GrantRead(lambdaFn);
 
-            // CloudWatch Log Group for EventBridge events
-            var eventLogGroup = new LogGroup(this, "EventBridgeLogGroup", new LogGroupProps
+            // Add S3 trigger to Lambda function
+            lambdaFn.AddEventSource(new S3EventSource(bucket, new S3EventSourceProps
             {
-                LogGroupName = "/your/eventbridge/log/group/name" // Replace with your desired log group name
-            });
+                Events = new[] { S3EventType.OBJECT_CREATED } // Trigger Lambda on object creation
+            }));
+        }
+    }
 
-            // Add EventBridge target to log events to CloudWatch Logs
-            eventRule.AddTarget(new CloudWatchLogGroup(eventLogGroup));
-
-            // Output the Glue Role ARN for reference
-            new CfnOutput(this, "EtlRoleOutput", new CfnOutputProps
-            {
-                Value = etlRole.RoleArn
-            });
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var app = new App();
+            new S3EventLambdaStack(app, "S3EventLambdaStack");
+            app.Synth();
         }
     }
 }
