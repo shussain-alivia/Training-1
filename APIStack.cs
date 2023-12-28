@@ -1,11 +1,18 @@
-using Amazon.CDK;
-using Amazon.CDK.AWS.IAM;
-using Amazon.CDK.AWS.Lambda;
-using Amazon.CDK.AWS.Events;
-using Amazon.CDK.AWS.Glue;
-using Amazon.CDK.AWS.S3;
-using Amazon.CDK.AWS.CloudWatch;
-using System.Collections.Generic;
+def lambda_handler(event, context):
+    try:
+        # Check if the event is related to a PutObject operation
+        if event['detail']['eventName'] == 'PutObject':
+            # Get the bucket name and object key
+            bucket_name = event['detail']['requestParameters']['bucketName']
+            object_key = event['detail']['requestParameters']['key']
+
+            # Process the S3 PutObject event (example: print the details)
+            print(f"S3 PutObject event detected in bucket '{bucket_name}' for object '{object_key}'")
+        else:
+            # Handle other types of events
+            print("Received event not related to S3 PutObject")
+    except KeyError as e:
+        print(f"KeyError: {e} - Event structure doesn't match the expected format")
 
 namespace RebatesEtlInfrastructure
 {
