@@ -1,4 +1,63 @@
 using Amazon.CDK;
+using Amazon.CDK.AWS.CloudTrail;
+using Amazon.CDK.AWS.Events;
+using Amazon.CDK.AWS.Events.Targets;
+
+namespace EventBridgeCloudTrailS3
+{
+    public class EventBridgeCloudTrailS3Stack : Stack
+    {
+        public EventBridgeCloudTrailS3Stack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+        {
+            // Define your S3 bucket name
+            string bucketName = "your-bucket-name";
+
+            // Create CloudTrail for the S3 bucket
+            var trail = new Trail(this, "S3BucketCloudTrail", new TrailProps
+            {
+                ManagementEvents = new[] { ReadWriteType.WRITE_ONLY }, // Configure the appropriate event types
+                S3BucketName = bucketName
+            });
+
+            // Define the EventBridge rule to capture CloudTrail events
+            var rule = new Rule(this, "CloudTrailS3Rule", new RuleProps
+            {
+                EventPattern = new EventPattern
+                {
+                    Source = new[] { "aws.s3" }, // Source of the event
+                    DetailType = new[] { "AWS API Call via CloudTrail" }, // CloudTrail event detail type
+                    Detail = new
+                    {
+                        eventSource = new[] { "s3.amazonaws.com" }, // S3 event source
+                        eventName = new[] { "PutObject" } // Event name (e.g., PutObject)
+                    }
+                }
+            });
+
+            // Add the CloudTrail trail as the target of the EventBridge rule
+            rule.AddTarget(new CloudTrailTarget(trail));
+        }
+    }
+
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var app = new App();
+            new EventBridgeCloudTrailS3Stack(app, "EventBridgeCloudTrailS3Stack");
+            app.Synth();
+        }
+    }
+}
+
+
+
+
+
+
+
+
+using Amazon.CDK;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
 using Amazon.CDK.AWS.S3;
