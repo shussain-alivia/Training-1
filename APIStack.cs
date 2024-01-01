@@ -3,6 +3,51 @@ using Amazon.CDK.AWS.S3;
 using Amazon.CDK.AWS.CloudTrail;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
+using Amazon.CDK.AWS.IAM;
+
+namespace S3CloudTrailMonitoring
+{
+    public class S3CloudTrailMonitoringStack : Stack
+    {
+        public S3CloudTrailMonitoringStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+        {
+            // Define your existing S3 bucket name
+            string bucketName = "my-existing-bucket"; // Replace with your existing bucket name
+
+            // Reference the existing bucket
+            var existingBucket = Bucket.FromBucketName(this, "ExistingBucket", bucketName);
+
+            // Allow necessary permissions for managing CloudTrail
+            var trailActions = new PolicyStatement(new PolicyStatementProps
+            {
+                Actions = new[] {
+                    "cloudtrail:DeleteTrail", // Action to delete a CloudTrail trail
+                    "cloudtrail:StopLogging", // Action to stop logging by a trail
+                    // Add more actions as needed for managing CloudTrail
+                },
+                Effect = Effect.ALLOW,
+                Resources = new[] { "*" } // Adjust the resource to be more specific if possible
+            });
+
+            // Attach the permissions to an IAM role
+            var role = new Role(this, "CloudTrailManagementRole", new RoleProps
+            {
+                AssumedBy = new ServicePrincipal("cloudtrail.amazonaws.com")
+            });
+            role.AddToPolicy(trailActions);
+        }
+    }
+}
+
+
+
+
+
+using Amazon.CDK;
+using Amazon.CDK.AWS.S3;
+using Amazon.CDK.AWS.CloudTrail;
+using Amazon.CDK.AWS.Events;
+using Amazon.CDK.AWS.Events.Targets;
 
 namespace S3CloudTrailMonitoring
 {
