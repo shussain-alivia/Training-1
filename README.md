@@ -1,10 +1,13 @@
- lambdaExecutionRole = new Role(this, "MyLambdaExecutionRole", new RoleProps
-            {
-                AssumedBy = new ServicePrincipal("lambda.amazonaws.com"),
-                Description = "Role for Lambda function execution",
-                ManagedPolicies = new[]
-                {
-                    ManagedPolicy.FromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")
-                }
-                // Add additional policies if required
-            });
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EventBridgeInvokePermission",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:InvokeFunction"
+      ],
+      "Resource": "arn:aws:lambda:REGION:ACCOUNT_ID:function:YOUR_LAMBDA_FUNCTION_NAME"
+    }
+  ]
+}
