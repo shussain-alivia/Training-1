@@ -1,4 +1,37 @@
 using Amazon.CDK;
+using Amazon.CDK.AWS.S3;
+using Amazon.CDK.AWS.CloudTrail;
+using Amazon.CDK.AWS.Events;
+using Amazon.CDK.AWS.Events.Targets;
+
+namespace S3CloudTrailMonitoring
+{
+    public class S3CloudTrailMonitoringStack : Stack
+    {
+        public S3CloudTrailMonitoringStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+        {
+            // Define your existing S3 bucket name
+            string bucketName = "my-existing-bucket"; // Replace with your existing bucket name
+
+            // Reference the existing bucket
+            var existingBucket = Bucket.FromBucketName(this, "ExistingBucket", bucketName);
+
+            // Add necessary permissions to the bucket policy
+            existingBucket.AddToResourcePolicy(new PolicyStatement(new PolicyStatementProps
+            {
+                Actions = new[] { "s3:GetBucketAcl", "s3:PutBucketAcl", "s3:PutBucketPolicy" }, // Adjust with required actions
+                Effect = Effect.ALLOW,
+                Principals = new[] { new AccountRootPrincipal() }, // Allows these actions for the AWS account root user
+                Resources = new[] { existingBucket.BucketArn } // Resource to apply these permissions to
+            }));
+        }
+    }
+}
+
+
+
+
+using Amazon.CDK;
 using Amazon.CDK.AWS.CloudTrail;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
