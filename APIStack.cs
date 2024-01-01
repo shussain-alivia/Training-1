@@ -1,3 +1,27 @@
+/ Allow necessary permissions for managing EventBridge
+            var eventBridgeActions = new PolicyStatement(new PolicyStatementProps
+            {
+                Actions = new[] {
+                    "events:PutRule", // Action to create or update a rule
+                    "events:DeleteRule", // Action to delete a rule
+                    "events:PutTargets", // Action to add a target to a rule
+                    "events:RemoveTargets", // Action to remove a target from a rule
+                    // Add more actions as needed for managing EventBridge
+                },
+                Effect = Effect.ALLOW,
+                Resources = new[] { "*" } // Adjust the resource to be more specific if possible
+            });
+
+            // Attach the permissions to an IAM role
+            var role = new Role(this, "EventBridgeManagementRole", new RoleProps
+            {
+                AssumedBy = new ServicePrincipal("events.amazonaws.com")
+            });
+            role.AddToPolicy(eventBridgeActions);
+
+
+
+
 using Amazon.CDK;
 using Amazon.CDK.AWS.S3;
 using Amazon.CDK.AWS.CloudTrail;
