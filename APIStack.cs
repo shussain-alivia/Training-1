@@ -1,3 +1,75 @@
+using Amazon.CDK;
+using Amazon.CDK.AWS.Events;
+using Amazon.CDK.AWS.Events.Targets;
+using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.S3;
+
+namespace MyNamespace
+{
+    public class MyCdkStack : Stack
+    {
+        public MyCdkStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+        {
+            // Create an S3 bucket
+            var bucket = new Bucket(this, "MyBucket", new BucketProps
+            {
+                BucketName = "my-bucket-name" // Replace with your bucket name
+            });
+
+            // Create a Lambda function
+            var lambdaFunction = new Function(this, "MyLambda", new FunctionProps
+            {
+                Runtime = Runtime.DOTNET_CORE_3_1, // Change to your desired runtime
+                Code = Code.FromAsset("path/to/your/lambda/code"), // Replace with your Lambda code path
+                Handler = "MyHandler::FunctionHandler", // Replace with your Lambda handler
+            });
+
+            // Create an EventBridge rule to trigger Lambda on S3 ObjectCreated events
+            var rule = new Rule(this, "S3ObjectCreatedRule", new RuleProps
+            {
+                EventPattern = new EventPattern
+                {
+                    Source = new[] { "aws.s3" },
+                    DetailType = new[] { "AWS API Call via CloudTrail" },
+                    Detail = new
+                    {
+                        eventSource = new[] { "s3.amazonaws.com" },
+                        eventName = new[] { "ObjectCreated:*" },
+                        requestParameters = new
+                        {
+                            bucketName = new[] { bucket.BucketName }
+                        }
+                    }
+                }
+            });
+            rule.AddTarget(new LambdaFunction(lambdaFunction));
+
+            // Grant permissions to S3 bucket to publish events to EventBridge
+            bucket.AddEventNotification(EventType.OBJECT_CREATED, new LambdaDestination(lambdaFunction));
+
+            // Allow S3 to publish events to EventBridge
+            bucket.AddToResourcePolicy(new PolicyStatement(new PolicyStatementProps
+            {
+                Actions = new[] { "events:PutEvents" },
+                Effect = Effect.ALLOW,
+                Resources = new[] { rule.RuleArn },
+                Principals = new IPrincipal[] { new ServicePrincipal("s3.amazonaws.com") }
+            }));
+
+            // Allow EventBridge to trigger the Lambda function
+            lambdaFunction.AddPermission("EventBridgeInvokePermission", new Permission
+            {
+                Principal = new ServicePrincipal("events.amazonaws.com"),
+                Action = "lambda:InvokeFunction",
+                SourceArn = rule.RuleArn
+            });
+        }
+    }
+}
+
+
+
 / Allow necessary permissions for managing EventBridge
             var eventBridgeActions = new PolicyStatement(new PolicyStatementProps
             {
