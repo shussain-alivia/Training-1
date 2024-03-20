@@ -1,6 +1,5 @@
 private void AddCorsOptions(Amazon.CDK.AWS.APIGateway.IResource apiResource, string url)
 {
-    // Define integration response for OPTIONS method
     var integrationResponse = new IntegrationResponse
     {
         StatusCode = "200",
@@ -13,8 +12,7 @@ private void AddCorsOptions(Amazon.CDK.AWS.APIGateway.IResource apiResource, str
         }
     };
 
-    // Define integration options for OPTIONS method
-    var integrationOptions = new IntegrationOptions
+    apiResource.AddMethod("OPTIONS", new MockIntegration(new IntegrationOptions
     {
         IntegrationResponses = new[] { integrationResponse },
         PassthroughBehavior = PassthroughBehavior.NEVER,
@@ -22,10 +20,7 @@ private void AddCorsOptions(Amazon.CDK.AWS.APIGateway.IResource apiResource, str
         {
             { "application/json", "{\"statusCode\": 200}" }
         }
-    };
-
-    // Add OPTIONS method to the API resource
-    apiResource.AddMethod("OPTIONS", new MockIntegration(integrationOptions), new MethodOptions
+    }), new MethodOptions
     {
         MethodResponses = new[]
         {
@@ -43,6 +38,3 @@ private void AddCorsOptions(Amazon.CDK.AWS.APIGateway.IResource apiResource, str
         }
     });
 }
-
-// Call AddCorsOptions method
-AddCorsOptions(api.Root, url);
