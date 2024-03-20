@@ -1,42 +1,57 @@
-private void AddCorsOptions(Amazon.CDK.AWS.APIGateway.IResource apiResource, string url)
+foreach (var svc in serviceLambdas)
 {
-    apiResource.AddMethod("OPTIONS", new MockIntegration(new IntegrationOptions()
+    var api = svc.Api;
+    
+    // Add OPTIONS method to each resource
+    foreach (var resource in api.Root.Resources.Values)
     {
-        IntegrationResponses = new IntegrationResponse[]
+        resource.AddMethod("OPTIONS", new MockIntegration(new IntegrationOptions()), new MethodOptions
         {
-            new IntegrationResponse()
+            MethodResponses = new MethodResponse[]
             {
-                StatusCode = ((int)HttpStatusCode.OK).ToString(),
-                ResponseParameters = new Dictionary<string, string>()
+                new MethodResponse
                 {
-                    { "method.response.header.Access-Control-Allow-Headers", "Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token, X-Anz-User-Agent" },
-                    { "method.response.header.Access-Control-Allow-Origin", url },
-                    { "method.response.header.Access-Control-Allow-Credentials", "false" },
-                    { "method.response.header.Access-Control-Allow-Methods", "OPTIONS, GET, PUT, POST, DELETE" }
+                    StatusCode = "200",
+                    ResponseParameters = new Dictionary<string, bool>
+                    {
+                        { "method.response.header.Access-Control-Allow-Headers", true },
+                        { "method.response.header.Access-Control-Allow-Methods", true },
+                        { "method.response.header.Access-Control-Allow-Origin", true }
+                    }
+                }
+            },
+            IntegrationResponses = new[]
+            {
+                new IntegrationResponse
+                {
+                    StatusCode = "200",
+                    ResponseParameters = new Dictionary<string, string>
+                    {
+                        { "method.response.header.Access-Control-Allow-Headers", "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Anz-User-Agent'" },
+                        { "method.response.header.Access-Control-Allow-Origin", "'*'" }, // Adjust as needed
+                        { "method.response.header.Access-Control-Allow-Methods", "'OPTIONS,GET,PUT,POST,DELETE'" } // Adjust as needed
+                    },
+                    PassthroughBehavior = PassthroughBehavior.NEVER,
+                    RequestTemplates = new Dictionary<string, string>
+                    {
+                        { "application/json", "{\"statusCode\": 200}" }
+                    }
                 }
             }
-        },
-        PassthroughBehavior = PassthroughBehavior.NEVER,
-        RequestTemplates = new Dictionary<string, string>()
-        {
-            { "application/json", "{\"statusCode\": 200}" }
-        }
-    }),
-    new MethodOptions()
+        });
+    }
+
+    // Add behavior options for CloudFront
+    behaviors.Add($"/{svc.ApiPath}/*", new BehaviorOptions
     {
-        MethodResponses = new MethodResponse[]
+        Origin = new RestApiOrigin(api, new RestApiOriginProps
         {
-            new MethodResponse()
-            {
-                StatusCode = ((int)HttpStatusCode.OK).ToString(),
-                ResponseParameters = new Dictionary<string, bool>()
-                {
-                    { "method.response.header.Access-Control-Allow-Headers", true },
-                    { "method.response.header.Access-Control-Allow-Methods", true },
-                    { "method.response.header.Access-Control-Allow-Credentials", true },
-                    { "method.response.header.Access-Control-Allow-Origin", true }
-                }
-            }
-        }
+            OriginId = $"{svc.ApiPath}-api-origin",
+            OriginPath = "", // Ensure this is empty
+        }),
+        ViewerProtocolPolicy = ViewerProtocolPolicy.ALLOW_ALL,
+        AllowedMethods = AllowedMethods.ALLOW_ALL,
+        CachePolicy = CachePolicy.CACHING_DISABLED,
+        OriginRequestPolicy = OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER
     });
 }
