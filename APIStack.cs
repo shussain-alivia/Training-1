@@ -1,57 +1,41 @@
-foreach (var svc in serviceLambdas)
+private void AddCorsOptions(Amazon.CDK.AWS.APIGateway.IResource apiResource, string url)
 {
-    var api = svc.Api;
-    
-    // Add OPTIONS method to each resource
-    foreach (var resource in api.Root.Resources.Values)
+    apiResource.AddMethod("OPTIONS", new MockIntegration(new IntegrationOptions
     {
-        resource.AddMethod("OPTIONS", new MockIntegration(new IntegrationOptions()), new MethodOptions
+        IntegrationResponses = new[]
         {
-            MethodResponses = new MethodResponse[]
+            new IntegrationResponse
             {
-                new MethodResponse
+                StatusCode = "200",
+                ResponseParameters = new Dictionary<string, string>
                 {
-                    StatusCode = "200",
-                    ResponseParameters = new Dictionary<string, bool>
-                    {
-                        { "method.response.header.Access-Control-Allow-Headers", true },
-                        { "method.response.header.Access-Control-Allow-Methods", true },
-                        { "method.response.header.Access-Control-Allow-Origin", true }
-                    }
-                }
-            },
-            IntegrationResponses = new[]
-            {
-                new IntegrationResponse
-                {
-                    StatusCode = "200",
-                    ResponseParameters = new Dictionary<string, string>
-                    {
-                        { "method.response.header.Access-Control-Allow-Headers", "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Anz-User-Agent'" },
-                        { "method.response.header.Access-Control-Allow-Origin", "'*'" }, // Adjust as needed
-                        { "method.response.header.Access-Control-Allow-Methods", "'OPTIONS,GET,PUT,POST,DELETE'" } // Adjust as needed
-                    },
-                    PassthroughBehavior = PassthroughBehavior.NEVER,
-                    RequestTemplates = new Dictionary<string, string>
-                    {
-                        { "application/json", "{\"statusCode\": 200}" }
-                    }
+                    { "method.response.header.Access-Control-Allow-Headers", "Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token, X-Anz-User-Agent" },
+                    { "method.response.header.Access-Control-Allow-Origin", url },
+                    { "method.response.header.Access-Control-Allow-Credentials", "false" },
+                    { "method.response.header.Access-Control-Allow-Methods", "OPTIONS, GET, PUT, POST, DELETE" }
                 }
             }
-        });
-    }
-
-    // Add behavior options for CloudFront
-    behaviors.Add($"/{svc.ApiPath}/*", new BehaviorOptions
-    {
-        Origin = new RestApiOrigin(api, new RestApiOriginProps
+        },
+        PassthroughBehavior = PassthroughBehavior.NEVER,
+        RequestTemplates = new Dictionary<string, string>
         {
-            OriginId = $"{svc.ApiPath}-api-origin",
-            OriginPath = "", // Ensure this is empty
-        }),
-        ViewerProtocolPolicy = ViewerProtocolPolicy.ALLOW_ALL,
-        AllowedMethods = AllowedMethods.ALLOW_ALL,
-        CachePolicy = CachePolicy.CACHING_DISABLED,
-        OriginRequestPolicy = OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER
+            { "application/json", "{\"statusCode\": 200}" }
+        }
+    }), new MethodOptions
+    {
+        MethodResponses = new[]
+        {
+            new MethodResponse
+            {
+                StatusCode = "200",
+                ResponseParameters = new Dictionary<string, bool>
+                {
+                    { "method.response.header.Access-Control-Allow-Headers", true },
+                    { "method.response.header.Access-Control-Allow-Methods", true },
+                    { "method.response.header.Access-Control-Allow-Credentials", true },
+                    { "method.response.header.Access-Control-Allow-Origin", true }
+                }
+            }
+        }
     });
 }
